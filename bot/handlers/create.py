@@ -7,16 +7,13 @@ from aiogram.types import Message
 from bot.app.container import AppContainer
 from bot.domain.enums import TradeStatus
 from bot.domain.exchanges import exchanges_list, is_supported_exchange, normalize_exchange
-from bot.domain.parser import parse_trade_message
+from bot.domain.parser import looks_like_setup, parse_trade_message
 from bot.domain.results import Failure
 from bot.handlers.states import CancelStates, EditStates, ProfileStates
 from bot.services.access_service import AccessService
 
 router = Router()
 log = logging.getLogger(__name__)
-
-_SETUP_MARKERS = ("type:", "leverage:", "sl:", "tp", "entry:", "comment:")
-
 
 def _setup_text(message: Message) -> str | None:
     text = message.text or message.caption
@@ -26,11 +23,6 @@ def _setup_text(message: Message) -> str | None:
     if not text or text.startswith("/"):
         return None
     return text
-
-
-def _looks_like_setup(body: str) -> bool:
-    lower = body.lower()
-    return any(marker in lower for marker in _SETUP_MARKERS)
 
 
 @router.message(
@@ -46,16 +38,22 @@ async def handle_setup_message(message: Message, container: AppContainer) -> Non
         return
 
     access: AccessService = container.access
+    if access.is_private_chat(message.chat.id):
+        if looks_like_setup(body):
+            await message.reply(
+                "⚠️ Setups can only be posted in the group <b>Setups</b> topic — not in DMs."
+            )
+        return
     if not await access.can_create_setup(
         message.bot, message.from_user.id, message.chat.id, message.message_thread_id
     ):
-        if _looks_like_setup(body):
+        if looks_like_setup(body):
             await message.reply("⚠️ Setups can only be posted in the Setups topic.")
         return
 
     first_line = normalize_exchange(body.splitlines()[0].strip())
     if not is_supported_exchange(first_line):
-        if _looks_like_setup(body):
+        if looks_like_setup(body):
             hint = exchanges_list()
             if body.splitlines()[0].strip().upper() in ("LONG", "SHORT"):
                 await message.reply(

@@ -405,11 +405,11 @@ def format_help() -> str:
     return (
         "<b>Trade Stats Bot</b>\n\n"
         f"<b>Биржи</b> {ex}\n\n"
-        "<b>Команды</b> (General)\n"
+        "<b>Команды</b> (General или личка бота)\n"
         "/faq — инструкция RU/EN\n"
         "/trades — ваши сделки\n"
         "/leaderboard — рейтинг\n"
-        "/myprofile — banner и sticker\n"
+        "/myprofile — banner и sticker (удобно в личке)\n"
         "/chat_id — ID группы\n"
         "/myid — ваш ID\n\n"
         "<b>Сетап</b> (ветка Setups)\n"

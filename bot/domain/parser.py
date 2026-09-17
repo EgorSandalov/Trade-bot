@@ -21,6 +21,27 @@ TP_PATTERN = re.compile(
 
 ParseResult = Success[ParsedTrade] | Failure
 
+_SETUP_FIELD_PREFIXES = ("type:", "leverage:", "entry:", "comment:", "sl:", "stop:")
+
+
+def _is_setup_field_line(line: str) -> bool:
+    lower = line.lower()
+    if lower.startswith(_SETUP_FIELD_PREFIXES):
+        return True
+    return TP_PATTERN.match(line) is not None
+
+
+def looks_like_setup(body: str) -> bool:
+    """True when a multi-line message resembles a trade setup (for General-topic warnings)."""
+    lines = [ln.strip() for ln in body.strip().splitlines() if ln.strip()]
+    if len(lines) < 3:
+        return False
+    if not is_supported_exchange(lines[0]):
+        return False
+    if lines[2].upper() in ("LONG", "SHORT"):
+        return True
+    return any(_is_setup_field_line(line) for line in lines[1:])
+
 
 def _parse_entry_type(line: str) -> EntryType | None:
     key = line.strip().lower()

@@ -2,7 +2,7 @@ from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
 
 from bot.config import ADMIN_IDS
-from bot.groups import CONFIGURED_GROUPS, get_group
+from bot.groups import CONFIGURED_GROUPS, get_group, primary_chat_id
 
 
 class AccessService:
@@ -12,14 +12,29 @@ class AccessService:
     def is_admin(self, user_id: int) -> bool:
         return user_id in ADMIN_IDS
 
-    def is_allowed_chat(self, chat_id: int, user_id: int) -> bool:
+    async def is_allowed_chat(self, bot: Bot, chat_id: int, user_id: int) -> bool:
         if self.is_private_chat(chat_id):
-            return self.is_admin(user_id)
+            if self.is_admin(user_id):
+                return True
+            if CONFIGURED_GROUPS:
+                return await self.is_group_member(bot, user_id)
+            return True
         if get_group(chat_id) is not None:
             return True
         if CONFIGURED_GROUPS:
             return self.is_admin(user_id)
         return True
+
+    async def resolve_trade_chat_id(
+        self, bot: Bot, user_id: int, chat_id: int
+    ) -> int | None:
+        """Group chat id for trade DB routing (DM → first configured group user belongs to)."""
+        if chat_id < 0:
+            return chat_id
+        for group in CONFIGURED_GROUPS.values():
+            if await self._is_member_of(bot, user_id, group.chat_id):
+                return group.chat_id
+        return primary_chat_id()
 
     @staticmethod
     def is_public_setup_command(text: str | None) -> bool:
@@ -80,7 +95,7 @@ class AccessService:
 
     async def can_use_general(self, bot: Bot, user_id: int, chat_id: int, thread_id: int | None) -> bool:
         if self.is_private_chat(chat_id):
-            return self.is_admin(user_id)
+            return await self.is_group_member(bot, user_id)
         if not await self.is_group_member(bot, user_id, chat_id):
             return False
         return self.is_general_topic(chat_id, thread_id)
