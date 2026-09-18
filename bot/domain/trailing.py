@@ -261,7 +261,8 @@ def format_sl_line(sl: StopLoss | ParsedStopLoss) -> str:
     def _plain(v: float) -> str:
         return f"{v:,.0f}".replace(",", "") if v >= 100 else f"{v:.4f}".rstrip("0").rstrip(".")
 
-    if sl.pre_activation_stop is not None and not sl.trail_active:
+    trail_active = getattr(sl, "trail_active", False)
+    if sl.pre_activation_stop is not None and not trail_active:
         line = f"SL: {_plain(sl.pre_activation_stop)}"
         line += f"\nSL: trail {sl.trail_value:g}{unit}"
     else:

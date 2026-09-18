@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 import pytest
 
 from bot.domain.enums import EntryType, LevelStatus, Side, TradeStatus, TrailMode
-from bot.domain.models import StopLoss, TakeProfitLevel, Trade
+from bot.domain.models import ParsedStopLoss, StopLoss, TakeProfitLevel, Trade
+from bot.domain.trailing import format_sl_line
 from bot.domain.parser import parse_trade_message
 from bot.domain.trade_edit import validate_trade_edit
 from bot.utils.trade_setup import format_trade_setup, split_edit_message
@@ -228,6 +229,19 @@ TP2: 96000 - 50%
 """
     _, _, errors = validate_trade_edit(trade, edit, 96500.0)
     assert any("already reachable" in e for e in errors)
+
+
+def test_format_sl_line_works_with_parsed_stop_loss():
+    sl = ParsedStopLoss(
+        trail_mode=TrailMode.DISTANCE,
+        price=88.0,
+        trail_value=0.5,
+        activation_price=88.0,
+        pre_activation_stop=95.13,
+    )
+    text = format_sl_line(sl)
+    assert "95.13" in text
+    assert "trail 0.5" in text
 
 
 def test_validate_allows_pre_activation_sl_for_short_trailing():
