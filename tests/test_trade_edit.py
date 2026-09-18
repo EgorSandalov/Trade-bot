@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from bot.domain.enums import EntryType, LevelStatus, Side, TradeStatus
+from bot.domain.enums import EntryType, LevelStatus, Side, TradeStatus, TrailMode
 from bot.domain.models import StopLoss, TakeProfitLevel, Trade
 from bot.domain.parser import parse_trade_message
 from bot.domain.trade_edit import validate_trade_edit
@@ -228,6 +228,77 @@ TP2: 96000 - 50%
 """
     _, _, errors = validate_trade_edit(trade, edit, 96500.0)
     assert any("already reachable" in e for e in errors)
+
+
+def test_validate_allows_pre_activation_sl_for_short_trailing():
+    trade = _trade(
+        exchange="OKX",
+        symbol="HYPEUSDT",
+        side=Side.SHORT,
+        entry_type=EntryType.MARKET,
+        entry_price=90.633,
+        executed_entry_price=90.633,
+        stop_loss=StopLoss(
+            id=1,
+            trade_id=1,
+            price=88.5,
+            trail_mode=TrailMode.DISTANCE,
+            trail_value=0.5,
+            activation_price=88.0,
+            pre_activation_stop=93.13,
+            trail_active=False,
+        ),
+        take_profits=[
+            TakeProfitLevel(id=1, trade_id=1, order_index=1, price=85.0, close_percent=100.0),
+        ],
+    )
+    edit = """\
+OKX
+HYPE
+SHORT
+Type: market
+Leverage: 10
+SL: 95.7
+SL: trail 0.5 - 88
+TP1: 85 - 100%
+"""
+    _, _, errors = validate_trade_edit(trade, edit, 91.638)
+    assert errors == []
+
+
+def test_validate_uses_active_trailing_sl_when_activation_reached():
+    trade = _trade(
+        side=Side.LONG,
+        entry_type=EntryType.MARKET,
+        entry_price=80000.0,
+        executed_entry_price=80000.0,
+        stop_loss=StopLoss(
+            id=1,
+            trade_id=1,
+            price=81200.0,
+            trail_mode=TrailMode.DISTANCE,
+            trail_value=420.0,
+            activation_price=81700.0,
+            pre_activation_stop=79000.0,
+            trail_active=True,
+            extreme_price=81600.0,
+        ),
+        take_profits=[
+            TakeProfitLevel(id=1, trade_id=1, order_index=1, price=82413.0, close_percent=100.0),
+        ],
+    )
+    edit = """\
+OKX
+BTC
+LONG
+Type: market
+Leverage: 10
+SL: 79000
+SL: trail 420 - 81700
+TP1: 82413 - 100%
+"""
+    _, _, errors = validate_trade_edit(trade, edit, 81600.0)
+    assert errors == []
 
 
 def test_validate_accepts_valid_partial_edit():

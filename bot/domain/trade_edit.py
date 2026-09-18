@@ -106,7 +106,8 @@ def validate_trade_edit(
 
     ref_price, ref_label = _levels_reference(trade, parsed, current_price)
     sl_preview = initial_trailing_state(parsed.stop_loss, trade.side, ref_price)
-    sl_eff = sl_preview.price
+    # Trailing: use pre-activation stop before activation, live trailing SL after activation.
+    sl_eff = parsed_sl_effective_price(parsed.stop_loss, trade.side, ref_price)
     all_level_errors = validate_price_levels(
         ref_price,
         trade.side,
@@ -129,10 +130,9 @@ def validate_trade_edit(
     ):
         check_sl = sl_preview if is_trailing(parsed.stop_loss) else None
         sl_live = sl_is_live(check_sl) if check_sl else True
-        sl_check_price = sl_eff if not is_trailing(parsed.stop_loss) else sl_preview.price
-        if sl_live and _would_trigger_sl(trade.side, current_price, sl_check_price):
+        if sl_live and _would_trigger_sl(trade.side, current_price, sl_eff):
             errors.append(
-                f"New SL ({_price_label(sl_check_price)}) would trigger immediately "
+                f"New SL ({_price_label(sl_eff)}) would trigger immediately "
                 f"at market {_price_label(current_price)}. "
                 "Adjust SL or close the remaining size manually."
             )

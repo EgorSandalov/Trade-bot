@@ -441,6 +441,7 @@ class TradeService:
             or old_sl.trail_mode != new_sl.trail_mode
             or old_sl.trail_value != new_sl.trail_value
             or old_sl.activation_price != new_sl.activation_price
+            or old_sl.pre_activation_stop != new_sl.pre_activation_stop
             or (old_sl.trail_mode == TrailMode.FIXED and old_sl.price != new_sl.price)
         )
         if sl_changed:
@@ -454,6 +455,10 @@ class TradeService:
                 new_sl.id = old_sl.id
                 new_sl.trade_id = old_sl.trade_id
                 new_sl.status = old_sl.status
+                if old_sl.trail_active and is_trailing(new_sl):
+                    new_sl.trail_active = True
+                    new_sl.extreme_price = old_sl.extreme_price
+                    new_sl.price = old_sl.price
             trade.stop_loss = new_sl
             await self.repo.replace_sl(trade.id, trade.stop_loss)
 
