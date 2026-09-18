@@ -110,6 +110,14 @@ def _trade_locked(trade) -> bool:
     return trade.status in (TradeStatus.CLOSED, TradeStatus.CANCELLED)
 
 
+def _card_user_id(message: Message, trade) -> int | None:
+    if trade.user_id:
+        return trade.user_id
+    if message.from_user:
+        return message.from_user.id
+    return None
+
+
 async def _edit_my_trade_view(
     container: AppContainer,
     bot,
@@ -139,13 +147,15 @@ async def _edit_my_trade_view(
         price = await fetch_price(trade.exchange, trade.symbol)
         text = format_trade_card(trade, price, events=events)
         kb = my_trade_active_kb(trade.id, period, page, setup_url, trades=nav_trades)
+    uid = trade.user_id
     if message:
-        return await edit_menu_message(message, text, kb)
-    return await edit_bot_message(
+        return await container.profiles.update_card(message, text, kb, user_id=uid)
+    await container.profiles.update_card_by_id(
         bot, chat_id, message_id, text, kb,
+        user_id=uid,
         message_thread_id=message_thread_id,
-        anchor_message=message,
     )
+    return None
 
 
 def _setup_url(trade: Trade) -> str | None:
@@ -182,7 +192,8 @@ async def _show_my_trade_view(
         price = await fetch_price(trade.exchange, trade.symbol)
         text = format_trade_card(trade, price, events=events)
         kb = my_trade_active_kb(trade.id, period, page, setup_url, trades=nav_trades)
-    return await edit_menu_message(message, text, kb)
+    uid = _card_user_id(message, trade)
+    return await container.profiles.update_card(message, text, kb, user_id=uid)
 
 
 def _state_trade_ctx(data: dict) -> tuple[str, int]:
@@ -262,10 +273,11 @@ async def trade_actions(callback: CallbackQuery, state: FSMContext, container: A
                 card_message_id=callback.message.message_id,
                 card_thread_id=callback.message.message_thread_id,
             )
-            effective = await edit_menu_message(
+            effective = await container.profiles.update_card(
                 callback.message,
                 format_edit_context(trade),
                 edit_prompt_kb(trade_id, period, page),
+                user_id=_card_user_id(callback.message, trade),
             )
             await state.update_data(
                 card_chat_id=effective.chat.id,
@@ -438,25 +450,31 @@ async def edit_setup(message: Message, state: FSMContext, container: AppContaine
     async def _update_edit_card(extra: str) -> None:
         text = format_edit_context(trade) + extra
         kb = edit_prompt_kb(trade_id, period, page)
+        uid = _card_user_id(message, trade)
         if card_chat_id and card_message_id:
-            fallback = await edit_bot_message(
+            cid, mid = await container.profiles.update_card_by_id(
                 message.bot,
                 card_chat_id,
                 card_message_id,
                 text,
                 kb,
+                user_id=uid,
                 message_thread_id=card_thread_id,
-                anchor_message=message,
             )
-            if fallback is not None:
-                await state.update_data(
-                    card_chat_id=fallback.chat.id,
-                    card_message_id=fallback.message_id,
-                    card_thread_id=fallback.message_thread_id,
-                )
-                await _save_card(container, trade_id, fallback.chat.id, fallback.message_id)
+            await state.update_data(
+                card_chat_id=cid,
+                card_message_id=mid,
+                card_thread_id=card_thread_id,
+            )
+            await _save_card(container, trade_id, cid, mid)
             return
-        await message.answer(text, reply_markup=kb, parse_mode="HTML")
+        effective = await container.profiles.update_card(message, text, kb, user_id=uid)
+        await state.update_data(
+            card_chat_id=effective.chat.id,
+            card_message_id=effective.message_id,
+            card_thread_id=effective.message_thread_id,
+        )
+        await _save_card(container, trade_id, effective.chat.id, effective.message_id)
 
     if not message.text:
         await _update_edit_card("\n\n⚠️ <i>Send the edited setup as text (copy the template above).</i>")
@@ -492,14 +510,21 @@ async def edit_setup(message: Message, state: FSMContext, container: AppContaine
 
     nav_trades = await _my_trades_for_nav(container, message.from_user.id, period)
     if card_chat_id and card_message_id:
-        fallback = await _edit_my_trade_view(
-            container, message.bot, card_chat_id, card_message_id, trade, period, page,
-            message=message,
-            message_thread_id=card_thread_id,
-            trades=nav_trades,
+        events = await container.trade_repo.get_events(trade.id)
+        card_text = format_trade_card(trade, price, events=events)
+        card_kb = my_trade_active_kb(
+            trade_id, period, page, _setup_url(trade), trades=nav_trades,
         )
-        if fallback is not None:
-            await _save_card(container, trade_id, fallback.chat.id, fallback.message_id)
+        cid, mid = await container.profiles.update_card_by_id(
+            message.bot,
+            card_chat_id,
+            card_message_id,
+            card_text,
+            card_kb,
+            user_id=trade.user_id,
+            message_thread_id=card_thread_id,
+        )
+        await _save_card(container, trade_id, cid, mid)
     else:
         await message.answer(
             format_trade_card(trade, price),
