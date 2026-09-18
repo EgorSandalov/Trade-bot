@@ -44,8 +44,8 @@ def next_trigger_in_candle(
     if trade.status == TradeStatus.PENDING and trade.entry_type == EntryType.LIMIT:
         entry = trade.entry_price
         hit = (
-            (trade.side == Side.LONG and candle.high >= entry)
-            or (trade.side == Side.SHORT and candle.low <= entry)
+            (trade.side == Side.LONG and candle.low <= entry)
+            or (trade.side == Side.SHORT and candle.high >= entry)
         )
         if hit:
             return CandleTrigger(TriggerKind.FILL_ENTRY, entry, at=candle.ts)
@@ -165,11 +165,11 @@ def spot_trigger(trade: Trade, price: float) -> CandleTrigger | None:
     if trade.status == TradeStatus.PENDING and trade.entry_type == EntryType.LIMIT:
         entry = trade.entry_price
         hit = (
-            (trade.side == Side.LONG and price >= entry)
-            or (trade.side == Side.SHORT and price <= entry)
+            (trade.side == Side.LONG and price <= entry)
+            or (trade.side == Side.SHORT and price >= entry)
         )
         if hit:
-            return CandleTrigger(TriggerKind.FILL_ENTRY, price)
+            return CandleTrigger(TriggerKind.FILL_ENTRY, entry)
         return None
 
     if trade.status not in (TradeStatus.OPEN, TradeStatus.PARTIALLY_CLOSED):
