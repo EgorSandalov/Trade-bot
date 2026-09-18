@@ -159,6 +159,16 @@ class TradeService:
             executed_entry = None
             opened_at = None
 
+        limit_reference_price: float | None = None
+        if parsed.entry_type == EntryType.LIMIT:
+            market_price = await fetch_price(parsed.exchange, parsed.symbol)
+            if market_price is None:
+                raise ValueError(
+                    f"Cannot fetch current market price from {parsed.exchange}. "
+                    "Try again later."
+                )
+            limit_reference_price = market_price
+
         if parsed.entry_type in (EntryType.LIMIT, EntryType.OPEN) and parsed.entry_price is not None:
             sl_state = initial_trailing_state(
                 parsed.stop_loss, parsed.side, parsed.entry_price,
@@ -196,6 +206,7 @@ class TradeService:
             status=status,
             entry_price=entry_price,
             executed_entry_price=executed_entry,
+            limit_reference_price=limit_reference_price,
             stop_loss=initial_trailing_state(
                 parsed.stop_loss,
                 parsed.side,
@@ -432,6 +443,12 @@ class TradeService:
                 trade.entry_price = parsed.entry_price
                 if trade.status in (TradeStatus.OPEN, TradeStatus.PARTIALLY_CLOSED):
                     trade.executed_entry_price = parsed.entry_price
+                elif (
+                    trade.status == TradeStatus.PENDING
+                    and trade.entry_type == EntryType.LIMIT
+                    and current_price is not None
+                ):
+                    trade.limit_reference_price = current_price
 
         sl_ref = current_price if current_price is not None else trade.effective_entry
         new_sl = initial_trailing_state(parsed.stop_loss, trade.side, sl_ref)
@@ -511,6 +528,15 @@ class TradeService:
     async def check_price_triggers(self, trade: Trade, *, full_replay: bool = False) -> Trade:
         if trade.id is not None and self.is_monitoring_paused(trade.id):
             return trade
+        if (
+            trade.status == TradeStatus.PENDING
+            and trade.entry_type == EntryType.LIMIT
+            and trade.limit_reference_price is None
+        ):
+            ref = await fetch_price(trade.exchange, trade.symbol)
+            if ref is not None:
+                trade.limit_reference_price = ref
+                await self.repo.update(trade)
         now = datetime.now(timezone.utc)
         events = await self.repo.get_events(trade.id) if trade.id else []
         since = self._replay_since(trade, now, full_replay=full_replay, events=events)

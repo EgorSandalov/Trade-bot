@@ -117,6 +117,7 @@ _MIGRATIONS = (
     "ALTER TABLE stop_losses ADD COLUMN extreme_price REAL",
     "ALTER TABLE stop_losses ADD COLUMN trail_active INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE stop_losses ADD COLUMN pre_activation_stop REAL",
+    "ALTER TABLE trades ADD COLUMN limit_reference_price REAL",
     "ALTER TABLE user_profiles ADD COLUMN profile_type TEXT NOT NULL DEFAULT 'photo'",
     "ALTER TABLE user_profiles ADD COLUMN telegram_file_id TEXT",
     "ALTER TABLE user_profiles ADD COLUMN custom_emoji_id TEXT",

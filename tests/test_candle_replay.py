@@ -99,12 +99,13 @@ def test_spot_does_not_see_reverted_tp_if_current_below_tp():
     assert trigger is None
 
 
-def test_limit_long_entry_on_candle_high():
+def test_limit_long_breakout_entry_on_candle_high():
     trade = _trade(
         entry_type=EntryType.LIMIT,
         status=TradeStatus.PENDING,
         entry_price=80000.0,
         executed_entry_price=None,
+        limit_reference_price=79800.0,
         opened_at=None,
     )
     candle = Candle(
@@ -117,6 +118,29 @@ def test_limit_long_entry_on_candle_high():
     trigger = next_trigger_in_candle(trade, candle)
     assert trigger is not None
     assert trigger.kind.value == "fill_entry"
+    assert trigger.price == 80000.0
+
+
+def test_limit_long_pullback_entry_on_candle_low():
+    trade = _trade(
+        entry_type=EntryType.LIMIT,
+        status=TradeStatus.PENDING,
+        entry_price=79000.0,
+        executed_entry_price=None,
+        limit_reference_price=80500.0,
+        opened_at=None,
+    )
+    candle = Candle(
+        ts=datetime(2026, 1, 1, 12, 1, tzinfo=timezone.utc),
+        open=79800.0,
+        high=79900.0,
+        low=78900.0,
+        close=79000.0,
+    )
+    trigger = next_trigger_in_candle(trade, candle)
+    assert trigger is not None
+    assert trigger.kind.value == "fill_entry"
+    assert trigger.price == 79000.0
 
 
 def test_short_sl_on_candle_high():

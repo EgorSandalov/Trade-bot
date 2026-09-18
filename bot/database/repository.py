@@ -66,19 +66,21 @@ class TradeRepository:
                 INSERT INTO trades (
                     user_id, user_name, username, exchange, symbol, side,
                     leverage, entry_type, status, entry_price, executed_entry_price,
+                    limit_reference_price,
                     remaining_percent, comment, close_reason,
                     result_clean_move_pct, result_personal_move_pct, avg_exit_price,
                     card_message_id, card_chat_id, setup_chat_id,
                     setup_message_id, setup_thread_id, result_points,
                     user_trade_number, last_monitored_at,
                     created_at, opened_at, closed_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     trade.user_id, trade.user_name, trade.username,
                     trade.exchange, trade.symbol, trade.side.value,
                     trade.leverage, trade.entry_type.value, trade.status.value,
                     trade.entry_price, trade.executed_entry_price,
+                    trade.limit_reference_price,
                     trade.remaining_percent, trade.comment,
                     trade.close_reason.value if trade.close_reason else None,
                     trade.result_clean_move_pct, trade.result_personal_move_pct,
@@ -113,6 +115,7 @@ class TradeRepository:
                 """
                 UPDATE trades SET
                     status=?, entry_price=?, executed_entry_price=?,
+                    limit_reference_price=?,
                     remaining_percent=?, leverage=?, entry_type=?,
                     comment=?, close_reason=?,
                     result_clean_move_pct=?, result_personal_move_pct=?,
@@ -124,6 +127,7 @@ class TradeRepository:
                 """,
                 (
                     trade.status.value, trade.entry_price, trade.executed_entry_price,
+                    trade.limit_reference_price,
                     trade.remaining_percent, trade.leverage, trade.entry_type.value,
                     trade.comment,
                     trade.close_reason.value if trade.close_reason else None,
@@ -441,6 +445,7 @@ class TradeRepository:
             status=TradeStatus(row["status"]),
             entry_price=row["entry_price"],
             executed_entry_price=row["executed_entry_price"],
+            limit_reference_price=col("limit_reference_price"),
             remaining_percent=row["remaining_percent"],
             comment=row["comment"],
             close_reason=CloseReason(row["close_reason"]) if row["close_reason"] else None,

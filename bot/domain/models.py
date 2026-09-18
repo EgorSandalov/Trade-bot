@@ -72,6 +72,7 @@ class Trade:
     status: TradeStatus
     entry_price: float
     executed_entry_price: float | None
+    limit_reference_price: float | None = None
     remaining_percent: float = 100.0
     stop_loss: StopLoss | None = None
     take_profits: list[TakeProfitLevel] = field(default_factory=list)

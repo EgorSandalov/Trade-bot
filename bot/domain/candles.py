@@ -34,6 +34,32 @@ class CandleTrigger:
     at: datetime | None = None
 
 
+def limit_waits_for_rise(trade: Trade) -> bool | None:
+    """True = fill when price rises to entry; False = when price falls; None = unknown."""
+    ref = trade.limit_reference_price
+    if ref is None:
+        return None
+    return trade.entry_price > ref
+
+
+def _limit_entry_hit(trade: Trade, *, price: float | None = None, candle: Candle | None = None) -> bool:
+    direction = limit_waits_for_rise(trade)
+    if direction is None:
+        return False
+    entry = trade.entry_price
+    if direction:
+        if price is not None:
+            return price >= entry
+        if candle is not None:
+            return candle.high >= entry
+    else:
+        if price is not None:
+            return price <= entry
+        if candle is not None:
+            return candle.low <= entry
+    return False
+
+
 def next_trigger_in_candle(
     trade: Trade,
     candle: Candle,
@@ -43,11 +69,7 @@ def next_trigger_in_candle(
     """Next SL/TP/entry trigger inside one candle (chronological heuristic)."""
     if trade.status == TradeStatus.PENDING and trade.entry_type == EntryType.LIMIT:
         entry = trade.entry_price
-        hit = (
-            (trade.side == Side.LONG and candle.low <= entry)
-            or (trade.side == Side.SHORT and candle.high >= entry)
-        )
-        if hit:
+        if _limit_entry_hit(trade, candle=candle):
             return CandleTrigger(TriggerKind.FILL_ENTRY, entry, at=candle.ts)
         return None
 
@@ -164,11 +186,7 @@ def spot_trigger(trade: Trade, price: float) -> CandleTrigger | None:
     """Same rules as live tick check (last price)."""
     if trade.status == TradeStatus.PENDING and trade.entry_type == EntryType.LIMIT:
         entry = trade.entry_price
-        hit = (
-            (trade.side == Side.LONG and price <= entry)
-            or (trade.side == Side.SHORT and price >= entry)
-        )
-        if hit:
+        if _limit_entry_hit(trade, price=price):
             return CandleTrigger(TriggerKind.FILL_ENTRY, entry)
         return None
 
