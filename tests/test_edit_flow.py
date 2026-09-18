@@ -120,13 +120,16 @@ async def test_edit_callback_updates_animation_caption():
     effective.message_id = 201
     effective.message_thread_id = 5
     container.trade_repo.update = AsyncMock()
-    container.profiles.update_card = AsyncMock(return_value=effective)
 
     with patch("bot.handlers.manage.fetch_price", new=AsyncMock(return_value=79000.0)):
-        await trade_actions(callback, state, container)
+        with patch(
+            "bot.handlers.manage.edit_menu_message",
+            new=AsyncMock(return_value=effective),
+        ) as edit_mock:
+            await trade_actions(callback, state, container)
 
-    container.profiles.update_card.assert_awaited_once()
-    prompt_text = container.profiles.update_card.await_args.args[1]
+    edit_mock.assert_awaited_once()
+    prompt_text = edit_mock.await_args.args[1]
     assert telegram_html_issues(prompt_text) == []
     assert "Edit trade" in prompt_text
     assert "OKX" in prompt_text

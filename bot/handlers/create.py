@@ -2,6 +2,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.filters import StateFilter
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from bot.app.container import AppContainer
@@ -10,6 +11,7 @@ from bot.domain.exchanges import exchanges_list, is_supported_exchange, normaliz
 from bot.domain.parser import looks_like_setup, parse_trade_message
 from bot.domain.results import Failure
 from bot.handlers.states import CancelStates, EditStates, ProfileStates
+from bot.handlers.trade_flow import end_trade_flow
 from bot.services.access_service import AccessService
 
 router = Router()
@@ -27,9 +29,13 @@ def _setup_text(message: Message) -> str | None:
 
 @router.message(
     (F.text & ~F.text.startswith("/")) | F.photo | F.document | F.video | F.animation,
-    ~StateFilter(EditStates, CancelStates, ProfileStates),
+    ~StateFilter(CancelStates, ProfileStates),
 )
-async def handle_setup_message(message: Message, container: AppContainer) -> None:
+async def handle_setup_message(
+    message: Message,
+    state: FSMContext,
+    container: AppContainer,
+) -> None:
     if not message.from_user:
         return
 
@@ -38,6 +44,10 @@ async def handle_setup_message(message: Message, container: AppContainer) -> Non
         return
 
     access: AccessService = container.access
+    if await state.get_state() == EditStates.waiting_setup:
+        if not access.is_setups_topic(message.chat.id, message.message_thread_id):
+            return
+        await end_trade_flow(state, container.trades)
     if access.is_private_chat(message.chat.id):
         if looks_like_setup(body):
             await message.reply(

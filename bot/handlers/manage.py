@@ -8,7 +8,7 @@ from bot.app.container import AppContainer
 from bot.domain.enums import Period, TradeStatus
 from bot.domain.models import Trade
 from bot.filters.general_topic import InGeneralOrPrivateFilter
-from bot.groups import get_group
+from bot.handlers.common import require_general
 from bot.handlers.states import CancelStates, EditStates
 from bot.handlers.trade_flow import begin_trade_flow, end_trade_flow
 from bot.keyboards.menus import (
@@ -110,26 +110,6 @@ def _trade_locked(trade) -> bool:
     return trade.status in (TradeStatus.CLOSED, TradeStatus.CANCELLED)
 
 
-def _card_user_id(message: Message, trade) -> int | None:
-    if trade.user_id:
-        return trade.user_id
-    if message.from_user:
-        return message.from_user.id
-    return None
-
-
-async def _can_reply_in_group(message: Message, access) -> bool:
-    if not message.from_user:
-        return False
-    if access.is_private_chat(message.chat.id):
-        return await access.is_group_member(message.bot, message.from_user.id)
-    if get_group(message.chat.id) is None:
-        return False
-    return await access.is_group_member(
-        message.bot, message.from_user.id, message.chat.id,
-    )
-
-
 async def _edit_my_trade_view(
     container: AppContainer,
     bot,
@@ -159,15 +139,13 @@ async def _edit_my_trade_view(
         price = await fetch_price(trade.exchange, trade.symbol)
         text = format_trade_card(trade, price, events=events)
         kb = my_trade_active_kb(trade.id, period, page, setup_url, trades=nav_trades)
-    uid = trade.user_id
     if message:
-        return await container.profiles.update_card(message, text, kb, user_id=uid)
-    await container.profiles.update_card_by_id(
+        return await edit_menu_message(message, text, kb)
+    return await edit_bot_message(
         bot, chat_id, message_id, text, kb,
-        user_id=uid,
         message_thread_id=message_thread_id,
+        anchor_message=message,
     )
-    return None
 
 
 def _setup_url(trade: Trade) -> str | None:
@@ -204,8 +182,7 @@ async def _show_my_trade_view(
         price = await fetch_price(trade.exchange, trade.symbol)
         text = format_trade_card(trade, price, events=events)
         kb = my_trade_active_kb(trade.id, period, page, setup_url, trades=nav_trades)
-    uid = _card_user_id(message, trade)
-    return await container.profiles.update_card(message, text, kb, user_id=uid)
+    return await edit_menu_message(message, text, kb)
 
 
 def _state_trade_ctx(data: dict) -> tuple[str, int]:
@@ -285,11 +262,10 @@ async def trade_actions(callback: CallbackQuery, state: FSMContext, container: A
                 card_message_id=callback.message.message_id,
                 card_thread_id=callback.message.message_thread_id,
             )
-            effective = await container.profiles.update_card(
+            effective = await edit_menu_message(
                 callback.message,
                 format_edit_context(trade),
                 edit_prompt_kb(trade_id, period, page),
-                user_id=_card_user_id(callback.message, trade),
             )
             await state.update_data(
                 card_chat_id=effective.chat.id,
@@ -432,9 +408,11 @@ async def trade_actions(callback: CallbackQuery, state: FSMContext, container: A
         return
 
 
-@router.message(EditStates.waiting_setup)
+@router.message(EditStates.waiting_setup, InGeneralOrPrivateFilter())
 async def edit_setup(message: Message, state: FSMContext, container: AppContainer) -> None:
-    if not await _can_reply_in_group(message, container.access):
+    if not message.from_user:
+        return
+    if not await require_general(message, container.access):
         return
 
     data = await state.get_data()
@@ -447,38 +425,38 @@ async def edit_setup(message: Message, state: FSMContext, container: AppContaine
 
     if not trade or trade.user_id != message.from_user.id:
         await end_trade_flow(state, container.trades)
+        await message.reply("⚠️ Trade not found — tap ◀ Back and open Edit again.")
         return
 
-    price = await fetch_price(trade.exchange, trade.symbol)
+    try:
+        price = await fetch_price(trade.exchange, trade.symbol)
+    except Exception:
+        log.exception("Price fetch failed during edit for trade %s", trade_id)
+        await message.reply("⚠️ Could not fetch market price — try again.")
+        return
 
     async def _update_edit_card(extra: str) -> None:
         text = format_edit_context(trade) + extra
         kb = edit_prompt_kb(trade_id, period, page)
-        uid = _card_user_id(message, trade)
         if card_chat_id and card_message_id:
-            cid, mid = await container.profiles.update_card_by_id(
+            fallback = await edit_bot_message(
                 message.bot,
                 card_chat_id,
                 card_message_id,
                 text,
                 kb,
-                user_id=uid,
                 message_thread_id=card_thread_id,
+                anchor_message=message,
             )
-            await state.update_data(
-                card_chat_id=cid,
-                card_message_id=mid,
-                card_thread_id=card_thread_id,
-            )
-            await _save_card(container, trade_id, cid, mid)
+            if fallback is not None:
+                await state.update_data(
+                    card_chat_id=fallback.chat.id,
+                    card_message_id=fallback.message_id,
+                    card_thread_id=fallback.message_thread_id,
+                )
+                await _save_card(container, trade_id, fallback.chat.id, fallback.message_id)
             return
-        effective = await container.profiles.update_card(message, text, kb, user_id=uid)
-        await state.update_data(
-            card_chat_id=effective.chat.id,
-            card_message_id=effective.message_id,
-            card_thread_id=effective.message_thread_id,
-        )
-        await _save_card(container, trade_id, effective.chat.id, effective.message_id)
+        await message.answer(text, reply_markup=kb, parse_mode="HTML")
 
     if not message.text:
         await _update_edit_card("\n\n⚠️ <i>Send the edited setup as text (copy the template above).</i>")
@@ -501,6 +479,12 @@ async def edit_setup(message: Message, state: FSMContext, container: AppContaine
         err_text = str(e).replace("\n", "\n• ")
         await _update_edit_card(f"\n\n⚠️ <i>{err_text}</i>")
         return
+    except Exception:
+        log.exception("apply_trade_edit failed for trade %s", trade_id)
+        await _update_edit_card(
+            "\n\n⚠️ <i>Could not save changes — check the template and try again.</i>"
+        )
+        return
 
     await delete_message(message)
     await end_trade_flow(state, container.trades)
@@ -508,22 +492,14 @@ async def edit_setup(message: Message, state: FSMContext, container: AppContaine
 
     nav_trades = await _my_trades_for_nav(container, message.from_user.id, period)
     if card_chat_id and card_message_id:
-        events = await container.trade_repo.get_events(trade.id)
-        setup_url = _setup_url(trade)
-        card_text = format_trade_card(trade, price, events=events)
-        card_kb = my_trade_active_kb(
-            trade_id, period, page, setup_url, trades=nav_trades,
-        )
-        cid, mid = await container.profiles.update_card_by_id(
-            message.bot,
-            card_chat_id,
-            card_message_id,
-            card_text,
-            card_kb,
-            user_id=trade.user_id,
+        fallback = await _edit_my_trade_view(
+            container, message.bot, card_chat_id, card_message_id, trade, period, page,
+            message=message,
             message_thread_id=card_thread_id,
+            trades=nav_trades,
         )
-        await _save_card(container, trade_id, cid, mid)
+        if fallback is not None:
+            await _save_card(container, trade_id, fallback.chat.id, fallback.message_id)
     else:
         await message.answer(
             format_trade_card(trade, price),
@@ -534,13 +510,13 @@ async def edit_setup(message: Message, state: FSMContext, container: AppContaine
         )
 
 
-@router.message(CancelStates.waiting_reason)
+@router.message(CancelStates.waiting_reason, InGeneralOrPrivateFilter())
 async def cancel_reason(message: Message, state: FSMContext, container: AppContainer) -> None:
     if not message.from_user or not message.text:
         return
     if message.text.startswith("/"):
         return
-    if not await _can_reply_in_group(message, container.access):
+    if not await require_general(message, container.access):
         return
 
     data = await state.get_data()

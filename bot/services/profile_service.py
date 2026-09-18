@@ -195,7 +195,7 @@ class ProfileService:
         user_id: int | None = None,
         *,
         photo_path: Path | None = None,
-    ) -> Message:
+    ) -> None:
         media = await self._resolve_card_media(user_id, photo_path)
         if media.kind == "animation":
             anim = self._animation_input(media)
@@ -204,10 +204,9 @@ class ProfileService:
                     InputMediaAnimation(media=anim, caption=caption, parse_mode="HTML"),
                     reply_markup=reply_markup,
                 )
-                return message
-            return await self._replace_message_with_animation(
-                message, anim, caption, reply_markup,
-            )
+                return
+            await self._replace_message_with_animation(message, anim, caption, reply_markup)
+            return
 
         path = media.path or self.group_banner()
         photo = FSInputFile(path)
@@ -216,95 +215,8 @@ class ProfileService:
                 InputMediaPhoto(media=photo, caption=caption, parse_mode="HTML"),
                 reply_markup=reply_markup,
             )
-            return message
-        return await self._replace_message_with_photo(message, photo, caption, reply_markup)
-
-    async def update_card_by_id(
-        self,
-        bot: Bot,
-        chat_id: int,
-        message_id: int,
-        caption: str,
-        reply_markup: InlineKeyboardMarkup | None = None,
-        user_id: int | None = None,
-        *,
-        message_thread_id: int | None = None,
-    ) -> tuple[int, int]:
-        """Update a card by chat/message id; returns (chat_id, message_id)."""
-        media = await self._resolve_card_media(user_id, None)
-        thread_kw = (
-            {"message_thread_id": message_thread_id} if message_thread_id is not None else {}
-        )
-        if media.kind == "animation":
-            anim = self._animation_input(media)
-            try:
-                await bot.edit_message_media(
-                    InputMediaAnimation(media=anim, caption=caption, parse_mode="HTML"),
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    reply_markup=reply_markup,
-                    **thread_kw,
-                )
-                return chat_id, message_id
-            except Exception:
-                pass
-            try:
-                await bot.edit_message_caption(
-                    caption=caption,
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    reply_markup=reply_markup,
-                    parse_mode="HTML",
-                    **thread_kw,
-                )
-                return chat_id, message_id
-            except Exception:
-                pass
-            await bot.delete_message(chat_id, message_id, **thread_kw)
-            sent = await bot.send_animation(
-                chat_id=chat_id,
-                animation=anim,
-                caption=caption,
-                reply_markup=reply_markup,
-                parse_mode="HTML",
-                **thread_kw,
-            )
-            return sent.chat.id, sent.message_id
-
-        photo = FSInputFile(media.path or self.group_banner())
-        try:
-            await bot.edit_message_media(
-                InputMediaPhoto(media=photo, caption=caption, parse_mode="HTML"),
-                chat_id=chat_id,
-                message_id=message_id,
-                reply_markup=reply_markup,
-                **thread_kw,
-            )
-            return chat_id, message_id
-        except Exception:
-            pass
-        try:
-            await bot.edit_message_caption(
-                caption=caption,
-                chat_id=chat_id,
-                message_id=message_id,
-                reply_markup=reply_markup,
-                parse_mode="HTML",
-                **thread_kw,
-            )
-            return chat_id, message_id
-        except Exception:
-            pass
-        await bot.delete_message(chat_id, message_id, **thread_kw)
-        sent = await bot.send_photo(
-            chat_id=chat_id,
-            photo=photo,
-            caption=caption,
-            reply_markup=reply_markup,
-            parse_mode="HTML",
-            **thread_kw,
-        )
-        return sent.chat.id, sent.message_id
+            return
+        await self._replace_message_with_photo(message, photo, caption, reply_markup)
 
     async def _resolve_card_media(
         self,
@@ -331,11 +243,11 @@ class ProfileService:
         animation,
         caption: str,
         reply_markup: InlineKeyboardMarkup | None,
-    ) -> Message:
+    ) -> None:
         chat_id = message.chat.id
         thread_id = message.message_thread_id
         await message.delete()
-        return await message.bot.send_animation(
+        await message.bot.send_animation(
             chat_id=chat_id,
             animation=animation,
             caption=caption,
@@ -350,11 +262,11 @@ class ProfileService:
         photo: FSInputFile,
         caption: str,
         reply_markup: InlineKeyboardMarkup | None,
-    ) -> Message:
+    ) -> None:
         chat_id = message.chat.id
         thread_id = message.message_thread_id
         await message.delete()
-        return await message.bot.send_photo(
+        await message.bot.send_photo(
             chat_id=chat_id,
             photo=photo,
             caption=caption,
