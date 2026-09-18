@@ -59,7 +59,8 @@ def validate_trade_edit(
     Returns (parsed, reason, errors). On success errors is empty.
     """
     setup_text, reason = split_edit_message(raw_text)
-    parsed_or_err = parse_trade_message(setup_text)
+    allow_missing_entry = trade.status in (TradeStatus.OPEN, TradeStatus.PARTIALLY_CLOSED)
+    parsed_or_err = parse_trade_message(setup_text, allow_missing_entry=allow_missing_entry)
     if isinstance(parsed_or_err, Failure):
         return None, reason, [parsed_or_err.error]
 
@@ -80,8 +81,8 @@ def validate_trade_edit(
         errors.append("Remove Entry line — market type uses live price at open.")
 
     if trade.status in (TradeStatus.OPEN, TradeStatus.PARTIALLY_CLOSED):
-        if trade.entry_type != EntryType.MARKET and parsed.entry_price is None:
-            errors.append("Entry is required for limit/open trades.")
+        if parsed.entry_price is not None:
+            errors.append("Remove Entry line — entry is locked after the trade is open.")
 
     triggered = [tp for tp in trade.take_profits if tp.status == LevelStatus.TRIGGERED]
     triggered_indices = {tp.order_index for tp in triggered}

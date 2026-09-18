@@ -75,7 +75,7 @@ def validate_price_levels(
     return errors
 
 
-def parse_trade_message(text: str) -> ParseResult:
+def parse_trade_message(text: str, *, allow_missing_entry: bool = False) -> ParseResult:
     lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
     if len(lines) < 6:
         return failure(
@@ -191,7 +191,11 @@ def parse_trade_message(text: str) -> ParseResult:
         errors.append("Leverage: 10")
     elif leverage < 1:
         errors.append("Leverage must be >= 1")
-    if entry_type != EntryType.MARKET and entry_price is None:
+    if (
+        entry_type != EntryType.MARKET
+        and entry_price is None
+        and not allow_missing_entry
+    ):
         errors.append("Entry: 95000  (required for limit and open)")
     if entry_type == EntryType.MARKET and entry_price is not None:
         errors.append("Entry: omit for market type (price is fetched automatically)")

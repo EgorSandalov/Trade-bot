@@ -36,7 +36,19 @@ def _trade(**kwargs) -> Trade:
     return Trade(**defaults)
 
 
-SETUP = """\
+OPEN_LIMIT_SETUP = """\
+OKX
+BTC
+LONG
+Type: limit
+Leverage: 10
+SL: 93000
+TP1: 96000 - 50%
+TP2: 97000 - 50%
+Comment: test
+"""
+
+PENDING_LIMIT_SETUP = """\
 OKX
 BTC
 LONG
@@ -50,22 +62,27 @@ Comment: test
 """
 
 
-def test_format_trade_setup_roundtrip():
+def test_format_trade_setup_open_limit_omits_entry():
     text = format_trade_setup(_trade())
     assert "OKX" in text
-    assert "Entry: 95000" in text
+    assert "Entry:" not in text
     assert "TP1: 96000 - 50%" in text
 
 
+def test_format_trade_setup_pending_limit_includes_entry():
+    text = format_trade_setup(_trade(status=TradeStatus.PENDING, executed_entry_price=None))
+    assert "Entry: 95000" in text
+
+
 def test_split_edit_reason():
-    body, reason = split_edit_message(SETUP + "\nReason: moved SL to BE")
+    body, reason = split_edit_message(OPEN_LIMIT_SETUP + "\nReason: moved SL to BE")
     assert "Reason:" not in body
     assert reason == "moved SL to BE"
 
 
 def test_validate_rejects_sl_above_market_for_long():
     """SL above current price is invalid even if it was valid vs entry."""
-    bad = SETUP.replace("SL: 93000", "SL: 80000")
+    bad = OPEN_LIMIT_SETUP.replace("SL: 93000", "SL: 80000")
     _, _, errors = validate_trade_edit(_trade(), bad, 79500.0)
     assert any("would trigger immediately" in e for e in errors)
 
@@ -94,11 +111,10 @@ BTC
 LONG
 Type: limit
 Leverage: 10
-Entry: 77000
 SL: 77200
 TP2: 77400 - 70%
 """
-    parsed = parse_trade_message(edit)
+    parsed = parse_trade_message(edit, allow_missing_entry=True)
     assert not hasattr(parsed, "error")
     _, _, errors = validate_trade_edit(trade, edit, 77338.0)
     assert errors == []
@@ -175,7 +191,6 @@ BTC
 LONG
 Type: limit
 Leverage: 10
-Entry: 95000
 SL: 93000
 TP2: 98000 - 40%
 TP3: 99000 - 30%
@@ -198,7 +213,7 @@ def test_validate_rejects_readding_hit_tp():
             ),
         ],
     )
-    edit = SETUP  # includes TP1 again
+    edit = OPEN_LIMIT_SETUP  # includes TP1 again
     _, _, errors = validate_trade_edit(trade, edit, 96500.0)
     assert any("TP1 already hit" in e for e in errors)
 
@@ -223,7 +238,6 @@ BTC
 LONG
 Type: limit
 Leverage: 10
-Entry: 95000
 SL: 93000
 TP2: 96000 - 50%
 """
@@ -335,7 +349,6 @@ BTC
 LONG
 Type: limit
 Leverage: 10
-Entry: 95000
 SL: 94000
 TP2: 98000 - 50%
 Reason: trail SL
@@ -344,3 +357,16 @@ Reason: trail SL
     assert not errors
     assert parsed is not None
     assert reason == "trail SL"
+
+
+def test_validate_rejects_entry_line_on_open_limit():
+    edit = PENDING_LIMIT_SETUP.replace("Entry: 95000", "Entry: 96000")
+    _, _, errors = validate_trade_edit(_trade(), edit, 96500.0)
+    assert any("entry is locked" in e.lower() for e in errors)
+
+
+def test_validate_allows_entry_change_on_pending_limit():
+    trade = _trade(status=TradeStatus.PENDING, executed_entry_price=None)
+    edit = PENDING_LIMIT_SETUP.replace("Entry: 95000", "Entry: 94000")
+    _, _, errors = validate_trade_edit(trade, edit, 96500.0)
+    assert errors == []

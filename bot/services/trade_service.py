@@ -435,20 +435,18 @@ class TradeService:
             changes.append(f"Leverage: {trade.leverage}x → {parsed.leverage}x")
             trade.leverage = parsed.leverage
 
-        if parsed.entry_type != EntryType.MARKET and parsed.entry_price is not None:
-            if parsed.entry_price != trade.entry_price:
-                changes.append(
-                    f"Entry: ${trade.entry_price:,.2f} → ${parsed.entry_price:,.2f}"
-                )
-                trade.entry_price = parsed.entry_price
-                if trade.status in (TradeStatus.OPEN, TradeStatus.PARTIALLY_CLOSED):
-                    trade.executed_entry_price = parsed.entry_price
-                elif (
-                    trade.status == TradeStatus.PENDING
-                    and trade.entry_type == EntryType.LIMIT
-                    and current_price is not None
-                ):
-                    trade.limit_reference_price = current_price
+        if (
+            trade.status == TradeStatus.PENDING
+            and parsed.entry_type != EntryType.MARKET
+            and parsed.entry_price is not None
+            and parsed.entry_price != trade.entry_price
+        ):
+            changes.append(
+                f"Entry: ${trade.entry_price:,.2f} → ${parsed.entry_price:,.2f}"
+            )
+            trade.entry_price = parsed.entry_price
+            if trade.entry_type == EntryType.LIMIT and current_price is not None:
+                trade.limit_reference_price = current_price
 
         sl_ref = current_price if current_price is not None else trade.effective_entry
         new_sl = initial_trailing_state(parsed.stop_loss, trade.side, sl_ref)

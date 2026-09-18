@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from html import escape
 
-from bot.domain.enums import EntryType, LevelStatus
+from bot.domain.enums import EntryType, LevelStatus, TradeStatus
 from bot.domain.models import Trade
 from bot.domain.numbers import parse_number
 from bot.domain.parser import TP_PATTERN, parse_trade_message
@@ -57,7 +57,7 @@ def format_trade_setup(trade: Trade, *, include_reason_hint: bool = False) -> st
         f"Leverage: {trade.leverage}",
     ]
 
-    if trade.entry_type != EntryType.MARKET:
+    if trade.entry_type != EntryType.MARKET and trade.status == TradeStatus.PENDING:
         lines.append(f"Entry: {_plain_price(trade.entry_price)}")
 
     if trade.stop_loss:
@@ -89,9 +89,13 @@ def format_edit_context(trade: Trade) -> str:
         "⏸ SL/TP monitoring is <b>paused</b> until you finish or tap Back.",
         "",
         "Do not change exchange, pair, direction, or Type.",
+    ]
+    if trade.status in (TradeStatus.OPEN, TradeStatus.PARTIALLY_CLOSED):
+        parts.append("Entry is locked after open — do not add an Entry line.")
+    parts.extend([
         "SL / trailing and pending TPs are checked vs <b>current market</b>.",
         "Trailing: <code>SL: trail 0,5%</code> or fixed + <code>SL: trail 0,5% - 80000</code>",
-    ]
+    ])
 
     triggered = [tp for tp in trade.take_profits if tp.status == LevelStatus.TRIGGERED]
     if triggered:
