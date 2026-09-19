@@ -4,10 +4,11 @@ from bot.domain.enums import CloseReason, LevelStatus, TradeEventType, TradeStat
 from bot.domain.models import LeaderboardEntry, StopLoss, Trade, TradeEvent, TraderStats
 from bot.keyboards.menus import ENTRY_LABELS, STATUS_LABELS
 from bot.domain.exchanges import exchanges_list
+from bot.domain.numbers import format_price
 
 
 def _price(v: float) -> str:
-    return f"{v:,.0f}" if v >= 100 else f"{v:.4f}"
+    return format_price(v)
 
 
 def _pct(v: float) -> str:

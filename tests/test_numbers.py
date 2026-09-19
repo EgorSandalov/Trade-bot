@@ -1,6 +1,6 @@
 import pytest
 
-from bot.domain.numbers import parse_number
+from bot.domain.numbers import format_price, parse_number
 
 
 @pytest.mark.parametrize(
@@ -19,3 +19,17 @@ from bot.domain.numbers import parse_number
 )
 def test_parse_number(text, expected):
     assert parse_number(text) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (104.82, "104.82"),
+        (118.71, "118.71"),
+        (111.0, "111"),
+        (96000.0, "96000"),
+        (0.049, "0.049"),
+    ],
+)
+def test_format_price(value, expected):
+    assert format_price(value) == expected

@@ -7,7 +7,7 @@ from html import escape
 
 from bot.domain.enums import EntryType, LevelStatus, TradeStatus
 from bot.domain.models import Trade
-from bot.domain.numbers import parse_number
+from bot.domain.numbers import format_price, parse_number
 from bot.domain.parser import TP_PATTERN, parse_trade_message
 from bot.domain.trailing import format_sl_line
 
@@ -15,9 +15,7 @@ _REASON_PREFIX = re.compile(r"^reason\s*:", re.IGNORECASE)
 
 
 def _plain_price(v: float) -> str:
-    if v >= 100:
-        return f"{v:,.0f}".replace(",", "")
-    return f"{v:.4f}".rstrip("0").rstrip(".")
+    return format_price(v)
 
 
 def split_edit_message(text: str) -> tuple[str, str | None]:

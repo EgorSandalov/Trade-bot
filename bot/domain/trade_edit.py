@@ -12,11 +12,12 @@ from bot.domain.trailing import (
     parsed_sl_effective_price,
     sl_is_live,
 )
+from bot.domain.numbers import format_price
 from bot.utils.trade_setup import parse_indexed_take_profits, split_edit_message
 
 
 def _price_label(v: float) -> str:
-    return f"{v:,.0f}" if v >= 100 else f"{v:.4f}"
+    return format_price(v)
 
 
 def _entry_for_validation(trade: Trade, parsed: ParsedTrade) -> float:

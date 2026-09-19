@@ -30,3 +30,18 @@ def parse_number(text: str) -> float:
         text = text.replace(",", "")
 
     return float(text)
+
+
+def format_price(v: float) -> str:
+    """Format price for display — keep decimals when they matter."""
+    v = float(v)
+    if abs(v - round(v)) < 1e-9:
+        n = int(round(v))
+        if abs(n) >= 1000:
+            return f"{n:,}".replace(",", "")
+        return str(n)
+    if abs(v) >= 100:
+        text = f"{v:,.4f}".replace(",", "")
+    else:
+        text = f"{v:.4f}"
+    return text.rstrip("0").rstrip(".")

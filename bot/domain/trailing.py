@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from bot.domain.enums import Side, TrailMode
+from bot.domain.numbers import format_price
 from bot.domain.exchange_trailing import validate_trailing_for_exchange
 from bot.domain.models import ParsedStopLoss, StopLoss, Trade  # noqa: TC001
 from bot.domain.numbers import parse_number
@@ -255,19 +256,16 @@ def parsed_sl_effective_price(
 def format_sl_line(sl: StopLoss | ParsedStopLoss) -> str:
     if sl.trail_mode == TrailMode.FIXED:
         price = sl.price
-        plain = f"{price:,.0f}".replace(",", "") if price >= 100 else f"{price:.4f}".rstrip("0").rstrip(".")
-        return f"SL: {plain}"
+        return f"SL: {format_price(price)}"
     unit = "%" if sl.trail_mode == TrailMode.PERCENT else ""
-    def _plain(v: float) -> str:
-        return f"{v:,.0f}".replace(",", "") if v >= 100 else f"{v:.4f}".rstrip("0").rstrip(".")
 
     trail_active = getattr(sl, "trail_active", False)
     if sl.pre_activation_stop is not None and not trail_active:
-        line = f"SL: {_plain(sl.pre_activation_stop)}"
+        line = f"SL: {format_price(sl.pre_activation_stop)}"
         line += f"\nSL: trail {sl.trail_value:g}{unit}"
     else:
         line = f"SL: trail {sl.trail_value:g}{unit}"
     if sl.activation_price is not None:
-        line += f" - {_plain(sl.activation_price)}"
+        line += f" - {format_price(sl.activation_price)}"
     return line
 

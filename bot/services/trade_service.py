@@ -15,6 +15,7 @@ from bot.domain.enums import (
 )
 from bot.domain.models import ParsedStopLoss, ParsedTrade, StopLoss, TakeProfitLevel, Trade, TradeEvent
 from bot.domain.parser import validate_price_levels
+from bot.domain.numbers import format_price
 from bot.domain.trailing import (
     apply_trailing_to_candle,
     apply_trailing_to_spot,
@@ -138,7 +139,7 @@ class TradeService:
             else:
                 level_errors = all_level_errors
             if level_errors:
-                price_label = f"{market_price:,.0f}" if market_price >= 100 else f"{market_price:.4f}"
+                price_label = format_price(market_price)
                 raise ValueError(
                     f"Current {parsed.symbol.replace('USDT', '')} price on "
                     f"{parsed.exchange}: {price_label}\n\n"
@@ -491,7 +492,7 @@ class TradeService:
         ]
         if new_pending:
             tp_desc = ", ".join(
-                f"TP{tp.order_index} ${tp.price:,.0f} ({tp.close_percent:.0f}%)"
+                f"TP{tp.order_index} ${format_price(tp.price)} ({tp.close_percent:.0f}%)"
                 for tp in new_pending
             )
             changes.append(f"Pending TPs: {tp_desc}")
