@@ -17,7 +17,12 @@ def parse_number(text: str) -> float:
             text = text.replace(",", "")
     elif comma_count == 1:
         before, after = text.split(",", 1)
-        if after.isdigit() and len(after) == 3 and before.isdigit():
+        if (
+            after.isdigit()
+            and len(after) == 3
+            and before.isdigit()
+            and int(before) > 0
+        ):
             text = before + after
         else:
             text = f"{before}.{after}"

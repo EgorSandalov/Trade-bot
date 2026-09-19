@@ -7,6 +7,8 @@ from bot.domain.numbers import parse_number
     "text,expected",
     [
         ("0,5", 0.5),
+        ("0,049", 0.049),
+        ("0,052", 0.052),
         ("0.5", 0.5),
         ("10,50", 10.5),
         ("96000", 96000.0),
