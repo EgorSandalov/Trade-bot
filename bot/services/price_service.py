@@ -376,12 +376,12 @@ async def fetch_price(exchange: str, symbol: str) -> float | None:
 
     if exchange == "BINANCE":
         data = await _get_json(
-            f"https://api.binance.com/api/v3/ticker/price?symbol={pair}"
+            f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={pair}"
         )
         if data:
             return float(data["price"])
         data = await _get_json(
-            f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={pair}"
+            f"https://api.binance.com/api/v3/ticker/price?symbol={pair}"
         )
         if data:
             return float(data["price"])
